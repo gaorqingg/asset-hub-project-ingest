@@ -1,0 +1,4 @@
+interface:
+  display_name: "Asset Hub Project Ingest"
+  short_description: "Prepare game resources for Asset Hub ingest"
+  default_prompt: "Use $asset-hub-project-ingest to inspect this APK export folder and plan its Asset Hub ingest."

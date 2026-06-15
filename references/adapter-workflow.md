@@ -58,7 +58,13 @@ Before copying, decide whether the target directory is new, replaceable, or cont
 
 ## 5. Write Database
 
-Use the database contract in `db-write-contract.md`. Prefer extending the Hub importer with a project adapter or a generic `hub-ingest.json` importer rather than writing ad hoc SQL by hand.
+If the Hub service is reachable, post the complete package to the remote ingest API:
+
+```powershell
+Invoke-RestMethod -Method Post -ContentType "application/json" -InFile H:\game_assets_rebuild\_hub_ingest\<projectId>\hub-ingest.json -Uri "http://192.168.0.9:5190/api/ingest/projects/<projectId>/replace"
+```
+
+See `api-ingest.md` for the full contract. Use the database contract in `db-write-contract.md` only for local fallback writes.
 
 If direct SQL is used, wrap the whole project import in `BEGIN IMMEDIATE` and `COMMIT`, and roll back on error.
 

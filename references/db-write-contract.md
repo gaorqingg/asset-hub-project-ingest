@@ -1,5 +1,7 @@
 # SQLite Write Contract
 
+Prefer the remote ingest API for projects prepared on other machines. Use direct SQLite writes only when running on the Hub database host or when the API is unavailable.
+
 The Hub database is usually:
 
 ```text
@@ -17,7 +19,7 @@ projects.asset_base_url   = http://192.168.0.9/<projectId>/assets
 projects.catalog_base_url = http://192.168.0.9/<projectId>/catalog
 ```
 
-`projects.source_catalog_json` and `projects.source_spine_manifest` may both point to the normalized `hub-ingest.json` if there is no original catalog or manifest.
+For API-written projects, `projects.source_catalog_json` and `projects.source_spine_manifest` are stored as `api://hub-ingest/<projectId>`. For local direct writes, they may both point to the normalized `hub-ingest.json` if there is no original catalog or manifest.
 
 ## Relative Path Fields
 

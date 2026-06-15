@@ -21,7 +21,7 @@ When working inside `H:/game_assets_rebuild/Game_Asset_Hub`, first read `ai-cont
 3. Build a project-specific adapter plan. Each source project may need its own extractor because APK exports, recovered configs, encryption, naming, and battle scripts vary.
 4. Normalize output to `hub-ingest.json`. See `references/data-contract.md`.
 5. Publish browser-loadable files to the shared destination layout. See `references/storage-and-publish.md`.
-6. Write or update SQLite using relative resource paths plus HTTP base URLs. See `references/db-write-contract.md`.
+6. Write the package through the remote ingest API when the Hub service is reachable. Use direct SQLite writes only as a local fallback. See `references/api-ingest.md` and `references/db-write-contract.md`.
 7. Validate database rows, disk paths, and HTTP URLs with `scripts/validate_hub_project.py`.
 
 ## Hard Rules
@@ -37,6 +37,7 @@ When working inside `H:/game_assets_rebuild/Game_Asset_Hub`, first read `ai-cont
 
 - `references/data-contract.md`: `hub-ingest.json` destination-object schema.
 - `references/storage-and-publish.md`: shared directory layout and HTTP URL rules.
+- `references/api-ingest.md`: remote HTTP ingest API contract and examples.
 - `references/db-write-contract.md`: SQLite table mapping and path invariants.
 - `references/adapter-workflow.md`: source-project adapter workflow and acceptance checks.
 
@@ -52,4 +53,10 @@ Validate an already-ingested project:
 
 ```powershell
 python C:\Users\gaorq\.codex\skills\asset-hub-project-ingest\scripts\validate_hub_project.py --db H:\game_assets_rebuild\Game_Asset_Hub\data\asset-hub.sqlite --project-id 3021 --wwwroot \\192.168.0.9\wwwroot --origin http://192.168.0.9
+```
+
+Post a complete package to a Hub service running on the database host:
+
+```powershell
+Invoke-RestMethod -Method Post -ContentType "application/json" -InFile H:\game_assets_rebuild\_hub_ingest\3001\hub-ingest.json -Uri "http://192.168.0.9:5190/api/ingest/projects/3001/replace"
 ```

@@ -1,1 +1,0 @@
-# asset-hub-project-ingest

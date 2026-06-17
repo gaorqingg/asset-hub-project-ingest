@@ -2,11 +2,13 @@
 
 `hub-ingest.json` is the normalized destination package for a source project. It describes what should be written to Game Asset Hub after source-specific extraction has already happened.
 
-The file should be kept with the derived ingest workspace, for example:
+During ingest, write the file to a unique short-lived workspace under the source project, for example:
 
 ```text
-H:/game_assets_rebuild/_hub_ingest/<projectId>/hub-ingest.json
+<sourceRoot>/_temp/asset-hub-ingest/<projectId>-<timestamp>/hub-ingest.json
 ```
+
+Delete that workspace after publishing, database/API write, and validation all succeed. Keep it on failure and report the path for debugging.
 
 ## Top-Level Shape
 
@@ -91,7 +93,7 @@ Each role represents a searchable character identity.
 
 ## spineAssets
 
-Each item is a character or actor Spine asset.
+Each item is a character, actor, or cutin Spine asset.
 
 ```json
 {
@@ -118,6 +120,45 @@ Each item is a character or actor Spine asset.
 ```
 
 All paths are relative to `<projectId>/assets`. Include either `skeletonPath` for binary Spine or `jsonPath` for JSON Spine. Include all atlas page textures in `pages`.
+
+### Cutin Spine Assets
+
+Cutin (特写动画) assets use the same `spineAssets` array and database table as character Spine assets. They are distinguished by path prefix, not by a separate top-level ingest collection.
+
+Recommended shape:
+
+```json
+{
+  "assetId": "cutin_liluoke_renjiedazhan_tips",
+  "sourceAssetId": "liluoke_renjiedazhan_tips",
+  "roleSourceId": "11004501",
+  "runtime": "pixi-spine-3.8",
+  "name": "liluoke_renjiedazhan_tips",
+  "skeletonPath": null,
+  "jsonPath": "spine/cutins/cutin_liluoke_renjiedazhan_tips/liluoke_renjiedazhan_tips.json",
+  "atlasPath": "spine/cutins/cutin_liluoke_renjiedazhan_tips/liluoke_renjiedazhan_tips.atlas",
+  "pages": ["spine/cutins/cutin_liluoke_renjiedazhan_tips/liluoke_renjiedazhan_tips.png"],
+  "version": "3.8.99",
+  "animations": [
+    {
+      "name": "liluoke_renjiedazhan_tips_ani",
+      "duration": null,
+      "frameRate": 24,
+      "isDefault": true
+    }
+  ],
+  "raw": {
+    "kind": "cutin"
+  }
+}
+```
+
+Rules:
+
+- Use `assetId` values that cannot collide with normal character assets. Prefer `cutin_<stem>` when adapting new projects.
+- Bind cutins to roles with `roleSourceId` when the source mapping is known.
+- Put `jsonPath` or `skeletonPath`, `atlasPath`, and every entry in `pages` under `spine/cutins/<cutinAssetId>/`.
+- Keep code, path, API, and field names in English as `cutin` / `cutins`; UI labels may display `特写动画`.
 
 ## effectAssets
 

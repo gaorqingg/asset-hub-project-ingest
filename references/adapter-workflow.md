@@ -13,6 +13,7 @@ python C:\Users\gaorq\.codex\skills\asset-hub-project-ingest\scripts\inspect_sou
 Look for:
 
 - Spine skeletons, JSON skeletons, atlas files, and page textures.
+- Cutin/tips Spine groups that should publish under `spine/cutins/`.
 - Role-like config files: role, hero, card, unit, knight, character.
 - Skill/action config files: skill, action, show, battle.
 - Effect config files: effect, eff, eff_node.
@@ -24,9 +25,9 @@ Tier A: roles and catalog images.
 
 Use when character identity and images are available but no reliable Spine pairing exists.
 
-Tier B: roles plus character Spine preview.
+Tier B: roles plus character and cutin Spine preview.
 
-Use when skeleton, atlas, pages, role mapping, and animation names can be recovered or safely inferred.
+Use when skeleton, atlas, pages, role mapping, and animation names can be recovered or safely inferred. Character previews publish under `spine/characters/`; cutin close-up previews publish under `spine/cutins/`.
 
 Tier C: action and effect playback.
 
@@ -34,10 +35,10 @@ Use only when timing, anchors, actor motion, hit timing, and effect placement ca
 
 ## 3. Build the Destination Package
 
-Create a derived workspace outside the source folder:
+Create a unique short-lived ingest workspace under the source project:
 
 ```text
-H:/game_assets_rebuild/_hub_ingest/<projectId>
+<sourceRoot>/_temp/asset-hub-ingest/<projectId>-<timestamp>
 ```
 
 Recommended files:
@@ -50,6 +51,8 @@ notes.md
 
 `source-map.json` can map each destination file/object back to the original extracted path. It is for traceability and does not need to be imported.
 
+The ingest workspace is temporary diagnostic material. Delete it only after publishing, database/API write, and validation all succeed. Keep it and report the path if any step fails.
+
 ## 4. Publish Files
 
 Copy only browser-loadable files to `\\192.168.0.9\wwwroot\<projectId>`.
@@ -61,7 +64,13 @@ Before copying, decide whether the target directory is new, replaceable, or cont
 If the Hub service is reachable, post the complete package to the remote ingest API:
 
 ```powershell
-Invoke-RestMethod -Method Post -ContentType "application/json" -InFile H:\game_assets_rebuild\_hub_ingest\<projectId>\hub-ingest.json -Uri "http://192.168.0.9:5190/api/ingest/projects/<projectId>/replace"
+$sourceRoot = "H:\game_assets_rebuild\<sourceProject>"
+$projectId = "<projectId>"
+$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$ingestDir = Join-Path $sourceRoot "_temp\asset-hub-ingest\$projectId-$timestamp"
+$hubIngestJson = Join-Path $ingestDir "hub-ingest.json"
+
+Invoke-RestMethod -Method Post -ContentType "application/json" -InFile $hubIngestJson -Uri "http://192.168.0.9:5190/api/ingest/projects/$projectId/replace"
 ```
 
 See `api-ingest.md` for the full contract. Use the database contract in `db-write-contract.md` only for local fallback writes.
@@ -76,12 +85,15 @@ Run:
 python C:\Users\gaorq\.codex\skills\asset-hub-project-ingest\scripts\validate_hub_project.py --db H:\game_assets_rebuild\Game_Asset_Hub\data\asset-hub.sqlite --project-id <projectId> --wwwroot \\192.168.0.9\wwwroot --origin http://192.168.0.9
 ```
 
+Add `--hub-base-url http://127.0.0.1:<port>` when a local Hub service is running and the validation should include `/api/projects/<projectId>/cutins`.
+
 Then smoke the Hub API:
 
 ```text
 /api/projects
 /api/projects/<projectId>/roles
 /api/projects/<projectId>/animations
+/api/projects/<projectId>/cutins
 /api/projects/<projectId>/spine/<assetId>
 /api/projects/<projectId>/actions
 /api/projects/<projectId>/actions/<actionId>/timeline
@@ -92,6 +104,25 @@ Acceptance criteria:
 - The project appears in the project list.
 - Role images and skill icons use `http://192.168.0.9/...` URLs.
 - Character Spine assets load from HTTP URLs.
+- Cutin Spine assets load from `/api/projects/<projectId>/cutins`.
+- The normal `/api/projects/<projectId>/animations` response does not include `spine/cutins/` assets.
 - No relative path field contains an HTTP URL.
 - No API response depends on `/external-assets/` or `/hub/projects/`.
 - Tier C projects have action cue counts that match source expectations.
+
+## 7. Clean Up
+
+After all validation and smoke checks pass, delete only the ingest workspace created for this run:
+
+```powershell
+$ingestRoot = Join-Path $sourceRoot "_temp\asset-hub-ingest"
+$resolvedRoot = [System.IO.Path]::GetFullPath($ingestRoot)
+$resolvedDir = [System.IO.Path]::GetFullPath($ingestDir)
+$rootPrefix = $resolvedRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+if (-not $resolvedDir.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+  throw "Refusing to delete ingest workspace outside $resolvedRoot"
+}
+Remove-Item -LiteralPath $resolvedDir -Recurse -Force
+```
+
+Do not delete failed ingest workspaces, source resources, or published files under `\\192.168.0.9\wwwroot`.

@@ -59,13 +59,38 @@ http://192.168.0.9/3001/assets/spine/characters/Naruto/Naruto.skel
 project_id      = <projectId>
 asset_id        = character assetId or effectAssetId
 role_source_id  = role id for character assets, null for effects
-kind            = skeleton | json | atlas | page | effect-skeleton | effect-json | effect-atlas | effect-page
+kind            = skeleton | json | atlas | page | cutin-skeleton | cutin-json | cutin-atlas | cutin-page | effect-skeleton | effect-json | effect-atlas | effect-page
 path            = relative path under <projectId>/assets
 url             = full HTTP URL
 exists_on_disk  = 1 when present under \\192.168.0.9\wwwroot\<projectId>\assets
 ```
 
 `asset_paths.url` may be a full HTTP URL. It should not use old local proxy patterns such as `/external-assets/` or `/hub/projects/`.
+
+## Cutin Spine Assets
+
+Cutin (特写动画) assets are written to the normal Spine tables and separated by path prefix.
+
+Required writes:
+
+```text
+spine_assets       one row per cutin asset, with json_path or skeleton_path under spine/cutins/
+animations         one row per cutin animation
+animations_fts     matching FTS rows for direct SQLite writes
+asset_paths        runtime file rows using cutin-* kinds
+```
+
+Path rules:
+
+```text
+spine_assets.json_path      = spine/cutins/<cutinAssetId>/<file>.json
+spine_assets.skeleton_path  = spine/cutins/<cutinAssetId>/<file>.skel
+spine_assets.atlas_path     = spine/cutins/<cutinAssetId>/<file>.atlas
+spine_assets.pages_json     = ["spine/cutins/<cutinAssetId>/<page>.png"]
+asset_paths.kind            = cutin-json | cutin-skeleton | cutin-atlas | cutin-page
+```
+
+Do not update `roles.has_spine` or normal project animation summaries just because a role has only cutin assets. The Hub's `/cutins` API derives cutin counts from the `spine/cutins/` prefix.
 
 ## FTS Tables
 

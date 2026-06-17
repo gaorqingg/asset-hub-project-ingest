@@ -28,11 +28,17 @@ Request body is the complete `hub-ingest.json` package. `body.project.id` must e
 Example:
 
 ```powershell
+$sourceRoot = "H:\game_assets_rebuild\3001_example"
+$projectId = "3001"
+$timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$ingestDir = Join-Path $sourceRoot "_temp\asset-hub-ingest\$projectId-$timestamp"
+$hubIngestJson = Join-Path $ingestDir "hub-ingest.json"
+
 Invoke-RestMethod `
   -Method Post `
   -ContentType "application/json" `
-  -InFile H:\game_assets_rebuild\_hub_ingest\3001\hub-ingest.json `
-  -Uri "http://192.168.0.9:5190/api/ingest/projects/3001/replace"
+  -InFile $hubIngestJson `
+  -Uri "http://192.168.0.9:5190/api/ingest/projects/$projectId/replace"
 ```
 
 Equivalent curl:
@@ -52,6 +58,21 @@ curl -X POST \
 - Entity path fields remain relative. Full HTTP URLs are written only to base URL fields and `asset_paths.url`.
 - The JSON request body limit is 50 MB.
 - Incremental upsert is not supported in v1.
+
+## Existing Project Cutin Appends
+
+The v1 replace API is a full-project write. Do not use it to append a few cutin assets to an already curated project unless the package intentionally contains the complete project state.
+
+For existing projects, prefer a project-specific script or a local SQLite transaction that deletes and rebuilds only the targeted cutin rows in:
+
+```text
+spine_assets
+animations
+animations_fts
+asset_paths
+```
+
+The script should match cutins by stable asset ids and `spine/cutins/` paths, leaving existing roles, catalog images, normal character animations, effects, and action data intact.
 
 ## Success Response
 
@@ -111,5 +132,6 @@ Then smoke:
 GET /api/projects/<projectId>
 GET /api/projects/<projectId>/roles
 GET /api/projects/<projectId>/animations
+GET /api/projects/<projectId>/cutins
 GET /api/projects/<projectId>/spine/<assetId>
 ```

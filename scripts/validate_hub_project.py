@@ -21,6 +21,7 @@ RELATIVE_FIELD_TABLES = {
     "asset_paths": ["path"],
 }
 OLD_PROXY_PATTERNS = ("/external-assets/", "/hub/projects/")
+CUTIN_PATH_PREFIX = "spine/cutins/"
 
 
 def normalize_slashes(value: str) -> str:
@@ -64,6 +65,24 @@ def fetch_status(url: str, timeout: float) -> dict[str, Any]:
         return {"url": url, "ok": False, "status": None, "error": str(error)}
 
 
+def fetch_json(url: str, timeout: float) -> dict[str, Any]:
+    request = urllib.request.Request(url, method="GET", headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            text = response.read().decode("utf-8", "replace")
+            data = json.loads(text)
+            return {
+                "url": url,
+                "ok": 200 <= response.status < 400,
+                "status": response.status,
+                "data": data,
+            }
+    except urllib.error.HTTPError as error:
+        return {"url": url, "ok": False, "status": error.code, "error": str(error)}
+    except Exception as error:  # noqa: BLE001
+        return {"url": url, "ok": False, "status": None, "error": str(error)}
+
+
 def query_one(db: sqlite3.Connection, sql: str, params: tuple[Any, ...]) -> sqlite3.Row | None:
     return db.execute(sql, params).fetchone()
 
@@ -71,6 +90,49 @@ def query_one(db: sqlite3.Connection, sql: str, params: tuple[Any, ...]) -> sqli
 def query_count(db: sqlite3.Connection, table: str, project_id: str) -> int:
     row = query_one(db, f"SELECT COUNT(*) AS count FROM {table} WHERE project_id = ?", (project_id,))
     return int(row["count"] if row else 0)
+
+
+def cutin_asset_predicate(alias: str = "") -> str:
+    prefix = f"{alias}." if alias else ""
+    return (
+        f"(lower(coalesce({prefix}json_path, '')) LIKE '{CUTIN_PATH_PREFIX}%' "
+        f"OR lower(coalesce({prefix}skeleton_path, '')) LIKE '{CUTIN_PATH_PREFIX}%')"
+    )
+
+
+def collect_cutin_counts(db: sqlite3.Connection, project_id: str) -> dict[str, int]:
+    cutin_predicate = cutin_asset_predicate()
+    cutin_assets = query_one(
+        db,
+        f"SELECT COUNT(*) AS count FROM spine_assets WHERE project_id = ? AND {cutin_predicate}",
+        (project_id,),
+    )
+    normal_spine_assets = query_one(
+        db,
+        f"SELECT COUNT(*) AS count FROM spine_assets WHERE project_id = ? AND NOT {cutin_predicate}",
+        (project_id,),
+    )
+    cutin_animations = query_one(
+        db,
+        f"""
+        SELECT COUNT(*) AS count
+        FROM animations a
+        JOIN spine_assets s ON s.project_id = a.project_id AND s.asset_id = a.asset_id
+        WHERE a.project_id = ? AND {cutin_asset_predicate("s")}
+        """,
+        (project_id,),
+    )
+    cutin_asset_paths = query_one(
+        db,
+        "SELECT COUNT(*) AS count FROM asset_paths WHERE project_id = ? AND (lower(coalesce(path, '')) LIKE ? OR lower(coalesce(kind, '')) LIKE 'cutin-%')",
+        (project_id, f"{CUTIN_PATH_PREFIX}%"),
+    )
+    return {
+        "normalSpineAssets": int(normal_spine_assets["count"] if normal_spine_assets else 0),
+        "cutinAssets": int(cutin_assets["count"] if cutin_assets else 0),
+        "cutinAnimations": int(cutin_animations["count"] if cutin_animations else 0),
+        "cutinAssetPaths": int(cutin_asset_paths["count"] if cutin_asset_paths else 0),
+    }
 
 
 def load_json_array(value: Any) -> list[str]:
@@ -153,6 +215,44 @@ def collect_http_checks(db: sqlite3.Connection, project_id: str, project: sqlite
     return [fetch_status(url, timeout) for url in urls[:max_http]]
 
 
+def collect_cutin_api_check(hub_base_url: str, project_id: str, timeout: float) -> dict[str, Any]:
+    url = join_url(hub_base_url, f"api/projects/{project_id}/cutins")
+    result = fetch_json(url, timeout)
+    data = result.pop("data", None)
+    if not result.get("ok"):
+        return result
+    if not isinstance(data, dict) or not isinstance(data.get("roles"), list):
+        return {
+            **result,
+            "ok": False,
+            "error": "Expected JSON object with roles array",
+        }
+
+    roles = data["roles"]
+    asset_count = 0
+    animation_count = 0
+    role_samples: list[str] = []
+    for role in roles:
+        if not isinstance(role, dict):
+            continue
+        role_samples.append(str(role.get("roleSourceId") or role.get("displayName") or ""))
+        assets = role.get("assets")
+        if not isinstance(assets, list):
+            continue
+        asset_count += len(assets)
+        for asset in assets:
+            if isinstance(asset, dict) and isinstance(asset.get("animations"), list):
+                animation_count += len(asset["animations"])
+
+    return {
+        **result,
+        "roleCount": len(roles),
+        "assetCount": asset_count,
+        "animationCount": animation_count,
+        "roleSamples": [sample for sample in role_samples[:10] if sample],
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate a Game Asset Hub project import.")
     parser.add_argument("--db", required=True, help="Path to asset-hub.sqlite")
@@ -162,6 +262,7 @@ def main() -> int:
     parser.add_argument("--max-http", type=int, default=50, help="Maximum HTTP URLs to check")
     parser.add_argument("--timeout", type=float, default=5.0, help="HTTP timeout in seconds")
     parser.add_argument("--skip-http", action="store_true", help="Skip HTTP checks")
+    parser.add_argument("--hub-base-url", default="", help="Optional Hub server base URL for API smoke checks, for example http://127.0.0.1:5190")
     parser.add_argument("--sample-limit", type=int, default=40, help="Maximum missing-path samples")
     args = parser.parse_args()
 
@@ -217,6 +318,15 @@ def main() -> int:
         "hitCues": query_count(db, "action_hit_cues", args.project_id),
         "effectCues": query_count(db, "action_effect_cues", args.project_id),
     }
+    counts.update(collect_cutin_counts(db, args.project_id))
+
+    cutin_api_check: dict[str, Any] | None = None
+    if args.hub_base_url:
+        cutin_api_check = collect_cutin_api_check(args.hub_base_url, args.project_id, args.timeout)
+        if not cutin_api_check.get("ok"):
+            errors.append("Cutins API smoke check failed")
+        elif counts["cutinAssets"] > 0 and int(cutin_api_check.get("assetCount") or 0) == 0:
+            errors.append("Cutins API returned no assets despite cutin DB rows")
 
     report = {
         "ok": not errors,
@@ -230,6 +340,7 @@ def main() -> int:
         "disk": disk,
         "relativeFieldErrors": relative_errors[: args.sample_limit],
         "httpChecks": http_checks,
+        "cutinApiCheck": cutin_api_check,
         "warnings": warnings,
         "errors": errors,
     }

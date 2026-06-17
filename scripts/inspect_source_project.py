@@ -31,6 +31,10 @@ CONFIG_HINTS = re.compile(
 ROLE_HINTS = re.compile(r"(role|hero|card|unit|knight|character)", re.IGNORECASE)
 SKILL_HINTS = re.compile(r"(skill|action|show|battle|script)", re.IGNORECASE)
 EFFECT_HINTS = re.compile(r"(effect|eff|fx|particle)", re.IGNORECASE)
+CUTIN_HINTS = re.compile(
+    r"(^|[/_\-.])(cutin|tips?|close[_-]?up|texie|te[_-]?xie)(?=($|[/_\-.]))",
+    re.IGNORECASE,
+)
 
 
 def rel(path: Path, root: Path) -> str:
@@ -103,6 +107,11 @@ def classify_config(path: Path) -> set[str]:
     return kinds
 
 
+def is_cutin_candidate(directory: Path, stem: str) -> bool:
+    value = f"{directory.as_posix()}/{stem}"
+    return bool(CUTIN_HINTS.search(value))
+
+
 def build_spine_groups(root: Path, files: list[Path]) -> list[dict[str, Any]]:
     by_dir_stem: dict[tuple[Path, str], dict[str, Any]] = defaultdict(lambda: {
         "skeletons": [],
@@ -146,6 +155,7 @@ def build_spine_groups(root: Path, files: list[Path]) -> list[dict[str, Any]]:
                 if (atlas.parent, Path(page).name.lower()) not in image_by_dir_name:
                     missing_pages.append(page)
         complete = bool((group["skeletons"] or group["jsonSkeletons"]) and group["atlases"] and page_refs and not missing_pages)
+        cutin_likely = is_cutin_candidate(directory, stem)
         groups.append({
             "stem": stem,
             "directory": rel(directory, root),
@@ -155,6 +165,7 @@ def build_spine_groups(root: Path, files: list[Path]) -> list[dict[str, Any]]:
             "atlasPageRefs": sorted(set(page_refs))[:16],
             "missingAtlasPages": sorted(set(missing_pages))[:16],
             "completeForPreview": complete,
+            "cutinLikely": cutin_likely,
         })
 
     groups.sort(key=lambda item: (not item["completeForPreview"], item["directory"], item["stem"]))
@@ -198,6 +209,7 @@ def main() -> int:
     ][: args.limit]
 
     complete_spine = sum(1 for group in spine_groups if group["completeForPreview"])
+    complete_cutin = sum(1 for group in spine_groups if group["completeForPreview"] and group["cutinLikely"])
     has_roles = bool(config_candidates["role"])
     has_actions = bool(config_candidates["skill_action"] or scripts)
     has_effects = bool(config_candidates["effect"] or any("effect" in group["directory"].lower() or "eff" in group["directory"].lower() for group in spine_groups))
@@ -210,6 +222,7 @@ def main() -> int:
         "spine": {
             "groupCount": len(spine_groups),
             "completeForPreviewCount": complete_spine,
+            "completeCutinPreviewCount": complete_cutin,
             "candidates": spine_groups[: args.limit],
         },
         "configCandidates": config_candidates,
@@ -218,6 +231,7 @@ def main() -> int:
         "ingestSignals": {
             "tierA_roleCatalogLikely": has_roles or bool(image_candidates),
             "tierB_spinePreviewLikely": complete_spine > 0,
+            "cutinPreviewLikely": complete_cutin > 0,
             "tierC_actionEffectNeedsAdapter": has_actions and has_effects,
         },
         "recommendation": (

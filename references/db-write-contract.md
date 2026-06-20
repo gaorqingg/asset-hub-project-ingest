@@ -8,7 +8,9 @@ The Hub database is usually:
 H:/game_assets_rebuild/Game_Asset_Hub/data/asset-hub.sqlite
 ```
 
-Write in one transaction per project. Delete and reinsert rows for the target `project_id` only; never clear unrelated projects.
+For full project ingest, write in one transaction per project. Delete and reinsert rows for the target `project_id` only; never clear unrelated projects.
+
+For item-level updates, write in one transaction per targeted item group and touch only the minimum affected rows. See `item-update-workflow.md`.
 
 ## Project Base URLs
 
@@ -104,6 +106,22 @@ animations_fts
 
 The simplest safe approach is to follow the existing Hub importer pattern: delete target project rows from FTS tables first, insert normal rows, then insert matching FTS rows with the inserted rowid.
 
+## Targeted Item Updates
+
+Use targeted writes for small changes to an existing curated project. Do not run a full project replace unless the package contains complete project state.
+
+Minimum scopes:
+
+```text
+catalog role update      roles, role_images, skills, roles_fts, skills_fts
+normal Spine item        spine_assets, animations, animations_fts, asset_paths, roles summary, projects summary
+cutin Spine item         spine_assets, animations, animations_fts, asset_paths only for targeted cutins
+action/effect item       role_actions, action_*_cues, effect_assets/asset_paths only if new effects are introduced
+file-only replacement    wwwroot files only when paths and metadata are unchanged
+```
+
+For targeted FTS updates, delete only the FTS rowids that correspond to the changed rows, then insert the replacement FTS rows with the new rowids. Do not clear project-wide FTS tables for a small item update.
+
 ## Action/Effect Tables
 
 Only write action/effect rows when the adapter can explain timing and placement from the original project chain.
@@ -119,5 +137,7 @@ action_hit_cues
 action_effect_cues
 project_battle_profiles
 ```
+
+When writing `role_actions` directly, store normalized optional action notes in `role_actions.remark`. Map source `remark`, `remarks`, `note`, `notes`, `comment`, or `comments` to `remark`; leave it `NULL` when empty. Include the remark text in `role_actions.search_text` so action filtering can match remark keywords.
 
 Use `effect_overrides` only as a last-resort manual layer after documenting the missing original source chain.

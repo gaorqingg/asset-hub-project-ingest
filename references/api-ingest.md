@@ -56,8 +56,22 @@ curl -X POST \
 - It deletes old rows for the target `project_id` and rebuilds project, role, image, skill, Spine, animation, asset path, effect, action, cue, FTS, and battle profile rows.
 - `source_catalog_json` and `source_spine_manifest` are stored as `api://hub-ingest/<projectId>`.
 - Entity path fields remain relative. Full HTTP URLs are written only to base URL fields and `asset_paths.url`.
+- Complete packages may include `actions[].remark`; the Hub ingest normalizes `remark`, `remarks`, `note`, `notes`, `comment`, and `comments` into the stored action remark.
 - The JSON request body limit is 50 MB.
 - Incremental upsert is not supported in v1.
+- The replace API is not a patch API. Do not send a partial `hub-ingest.json` to update a few records in an existing project.
+
+## Item-Level Updates
+
+For small updates such as one role animation, several catalog roles, a few skill icons, or a handful of cutins, choose one of these strategies:
+
+```text
+complete replace package      Use the replace API only if the JSON contains the full current project state plus the changes.
+local targeted script         Run a transaction on the Hub database host that touches only the target rows.
+module-specific API           Design and implement a new targeted endpoint first, then call it remotely.
+```
+
+If the source work happens on another machine and there is no targeted API yet, do not fake a partial full-project package. Either move the targeted script to the database host or implement the dedicated API.
 
 ## Existing Project Cutin Appends
 

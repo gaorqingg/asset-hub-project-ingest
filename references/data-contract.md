@@ -198,6 +198,7 @@ Actions are optional and should only be created when the source battle code/conf
   "scriptName": "Skill_2001",
   "durationMs": 1800,
   "isPrimary": true,
+  "remark": "Optional notes captured during action entry or recovery.",
   "actorCues": [],
   "motionCues": [],
   "hitCues": [],
@@ -205,6 +206,8 @@ Actions are optional and should only be created when the source battle code/conf
   "raw": {}
 }
 ```
+
+Use `remark` as the normalized optional action-note field. When adapting source data, map the first non-empty source field among `remark`, `remarks`, `note`, `notes`, `comment`, and `comments` to `remark`. If there is no action note, omit `remark` or set it to `null`.
 
 Cue field names should mirror the existing Hub normalized structures: actor cues switch animations, motion cues move actors, hit cues describe target hit timing, and effect cues spawn effect assets.
 

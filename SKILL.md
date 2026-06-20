@@ -1,6 +1,6 @@
 ---
 name: asset-hub-project-ingest
-description: Use when preparing an APK export or irregular game resource folder for Game Asset Hub ingestion, including role catalogs, Spine character assets, cutin close-up Spine assets, Spine effect assets, action/effect timelines, shared HTTP publishing under \\192.168.0.9\wwwroot, hub-ingest.json creation, SQLite path rules, and validation.
+description: Use when preparing an APK export or irregular game resource folder for Game Asset Hub ingestion, or when adding/replacing individual Hub module items such as role catalog records, character Spine animations, cutin close-up Spine assets, skill images/text, action/effect timeline entries, and optional action remarks. Covers shared HTTP publishing under \\192.168.0.9\wwwroot, hub-ingest.json creation, SQLite/API path rules, targeted item updates, and validation.
 ---
 
 # Asset Hub Project Ingest
@@ -14,6 +14,8 @@ For 特写动画, use the English code/API/path term `cutin` / `cutins`. Cutin a
 When working inside `H:/game_assets_rebuild/Game_Asset_Hub`, first read `ai-context/README.md` and the latest handoff notes before making ingest decisions.
 
 ## Workflow
+
+If the user asks to add, replace, or fix only a few items inside an existing Hub module, read `references/item-update-workflow.md` first. Do not default to full-project replace for item-level changes.
 
 1. Inspect the source folder without changing it. Prefer `scripts/inspect_source_project.py` to find character Spine candidates, cutin/tips Spine candidates, atlas/page pairings, role/skill/effect config candidates, and action-script hints.
 2. Decide the ingest tier:
@@ -45,6 +47,7 @@ When working inside `H:/game_assets_rebuild/Game_Asset_Hub`, first read `ai-cont
 - Use `cutin-json`, `cutin-skeleton`, `cutin-atlas`, and `cutin-page` for cutin `asset_paths.kind` rows. Do not write cutin files with the generic `json`, `skeleton`, `atlas`, or `page` kinds.
 - For cutin-only projects or cutin-only appends, keep normal role lists and normal animation pages clean: cutin rows may be searchable through cutin APIs, but they must not imply ordinary character Spine coverage.
 - When directly appending or replacing cutins in SQLite, delete and rebuild only the targeted cutin rows in `spine_assets`, `animations`, `animations_fts`, and `asset_paths`; leave existing roles, catalog images, normal character Spine assets, effects, actions, and battle profiles intact.
+- For item-level updates, first identify the target module and row keys, then update only the minimum affected rows and FTS rows. Never use a partial `hub-ingest.json` with the full replace API to patch a few items in an existing curated project.
 - Keep `spine_assets`, `effect_assets`, `role_images`, and `skills.icon_path` paths relative. Full HTTP URLs belong in project base URL fields and optionally `asset_paths.url`.
 - Do not add display-only offsets for action/effect positioning until the original battle code/config chain has been checked.
 - Do not use destructive mirroring such as `robocopy /MIR` unless the target project directory is known to be disposable.
@@ -56,6 +59,7 @@ When working inside `H:/game_assets_rebuild/Game_Asset_Hub`, first read `ai-cont
 - `references/api-ingest.md`: remote HTTP ingest API contract and examples.
 - `references/db-write-contract.md`: SQLite table mapping and path invariants.
 - `references/adapter-workflow.md`: source-project adapter workflow and acceptance checks.
+- `references/item-update-workflow.md`: targeted add/replace workflow for individual module items.
 
 ## Useful Commands
 

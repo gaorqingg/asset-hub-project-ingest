@@ -2,6 +2,8 @@
 
 Every source project can be different. The adapter's job is not to make the source tidy; it is to produce the stable Hub destination contract.
 
+If the task is to add or replace only a few items in an existing project, use `item-update-workflow.md` instead of this full ingest workflow.
+
 ## 1. Inspect
 
 Run the read-only scanner first:
